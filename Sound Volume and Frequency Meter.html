@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sound Volume and Frequency Meter</title>
+    <style>
+        /* Body Styles for Dark Theme */
+        body {
+            font-family: 'Roboto', sans-serif;
+            margin: 0;
+            padding: 0;
+            background: #121212;
+            color: #e0e0e0;
+            text-align: center;
+        }
+
+        /* Header Logo */
+        .logo {
+            font-size: 36px;
+            font-weight: bold;
+            color: #4caf50;
+            margin: 20px 0;
+            text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Main Title */
+        h1 {
+            font-size: 28px;
+            margin-bottom: 20px;
+            text-shadow: 1px 1px 10px rgba(255, 255, 255, 0.2);
+        }
+
+        /* Button Styles */
+        button {
+            background: #1f1f1f;
+            color: #4caf50;
+            border: 1px solid #4caf50;
+            padding: 10px 20px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s, transform 0.2s;
+            box-shadow: 0px 5px 15px rgba(0, 0, 0, 0.5);
+        }
+
+        button:hover {
+            background: #4caf50;
+            color: #1f1f1f;
+            transform: scale(1.05);
+        }
+
+        /* Canvas Styles */
+        canvas {
+            display: block;
+            margin: 20px auto;
+            border: 2px solid #4caf50;
+            border-radius: 10px;
+            background: #1e1e1e;
+        }
+
+        /* Output Container */
+        .output {
+            font-size: 20px;
+            margin-top: 20px;
+            background: #1f1f1f;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0px 5px 15px rgba(0, 0, 0, 0.5);
+        }
+
+        .output p {
+            margin: 10px 0;
+        }
+
+        .output span {
+            font-weight: bold;
+            color: #4caf50;
+        }
+    </style>
+</head>
+<body>
+    <div class="logo">BM DOT LK</div>
+    <h1>Sound Volume and Frequency Meter</h1>
+    <button onclick="startListening()">Start Listening</button>
+    <canvas id="volume-meter" width="600" height="200"></canvas>
+    <div class="output">
+        <p>Frequency: <span id="frequency">0</span> Hz</p>
+        <p>Current Volume: <span id="volume">0</span> dB</p>
+    </div>
+
+    <script>
+        let audioContext;
+        let analyser;
+        let microphone;
+        let javascriptNode;
+        let canvas, canvasContext;
+        const threshold = -30; // unbearable sound volume threshold in dB
+        const beepSound = new Audio('https://www.soundjay.com/button/beep-07.wav');
+
+        function startListening() {
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(function (stream) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    analyser = audioContext.createAnalyser();
+                    analyser.fftSize = 2048;
+
+                    microphone = audioContext.createMediaStreamSource(stream);
+                    microphone.connect(analyser);
+
+                    javascriptNode = audioContext.createScriptProcessor(2048, 1, 1);
+                    javascriptNode.connect(audioContext.destination);
+
+                    canvas = document.getElementById('volume-meter');
+                    canvasContext = canvas.getContext('2d');
+
+                    javascriptNode.onaudioprocess = function () {
+                        let dataArray = new Uint8Array(analyser.frequencyBinCount);
+                        analyser.getByteFrequencyData(dataArray);
+
+                        let volume = calculateVolume(dataArray);
+                        let dominantFrequency = getDominantFrequency(dataArray);
+
+                        document.getElementById('volume').textContent = volume.toFixed(2);
+                        document.getElementById('frequency').textContent = dominantFrequency;
+
+                        if (volume < threshold) {
+                            playBeep();
+                        }
+
+                        drawVolumeMeter(dataArray);
+                    };
+
+                    analyser.connect(javascriptNode);
+                })
+                .catch(function (err) {
+                    console.error("Error accessing microphone: ", err);
+                });
+        }
+
+        function calculateVolume(dataArray) {
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+                sum += dataArray[i];
+            }
+            return 20 * Math.log10(sum / dataArray.length / 255);
+        }
+
+        function getDominantFrequency(dataArray) {
+            let maxVal = -1;
+            let maxIndex = -1;
+            for (let i = 0; i < dataArray.length; i++) {
+                if (dataArray[i] > maxVal) {
+                    maxVal = dataArray[i];
+                    maxIndex = i;
+                }
+            }
+            let nyquist = audioContext.sampleRate / 2;
+            return (maxIndex * nyquist / dataArray.length).toFixed(2);
+        }
+
+        function drawVolumeMeter(dataArray) {
+            canvasContext.clearRect(0, 0, canvas.width, canvas.height);
+            canvasContext.fillStyle = '#4caf50';
+            let barWidth = canvas.width / dataArray.length;
+            for (let i = 0; i < dataArray.length; i++) {
+                let barHeight = (dataArray[i] / 255) * canvas.height;
+                canvasContext.fillRect(i * barWidth, canvas.height - barHeight, barWidth, barHeight);
+            }
+        }
+
+        function playBeep() {
+            if (beepSound.paused) {
+                beepSound.play();
+            }
+        }
+    </script>
+</body>
+</html>
